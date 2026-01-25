@@ -2,7 +2,7 @@
 //  AppDelegate.swift
 //  ARkit-iOS
 //
-//  Created by Ruhul Quddus Tamin on 12/01/2026.
+//  Created by Ruhul Quddus Tamim on 12/01/2026.
 //
 
 import UIKit
