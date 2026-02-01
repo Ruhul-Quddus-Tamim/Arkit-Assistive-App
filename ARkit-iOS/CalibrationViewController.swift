@@ -403,6 +403,8 @@ class CalibrationViewController: UIViewController {
             
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 self.delegate?.calibrationDidComplete(calibration)
+                // Dismiss the calibration view controller after completion
+                self.dismiss(animated: true)
             }
         } else {
             showError("Calibration failed. Please try again.")

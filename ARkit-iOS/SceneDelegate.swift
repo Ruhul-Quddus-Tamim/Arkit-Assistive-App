@@ -18,10 +18,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         
-        print("SceneDelegate: Setting up window and CameraViewController")
+        print("SceneDelegate: Setting up window and HomeViewController")
         let window = UIWindow(windowScene: windowScene)
-        let cameraVC = CameraViewController()
-        window.rootViewController = cameraVC
+        let homeVC = HomeViewController()
+        let navController = UINavigationController(rootViewController: homeVC)
+        navController.setNavigationBarHidden(true, animated: false) // Hide nav bar for full-screen design
+        window.rootViewController = navController
         self.window = window
         window.makeKeyAndVisible()
         print("SceneDelegate: Window made key and visible")
