@@ -20,6 +20,9 @@ class CameraViewController: UIViewController {
     private let eyeTracker = EyeTracker()
     private let networkClient = TrackingDataClient()
     private var isTracking = false
+    private var lastFaceAnchor: ARFaceAnchor?
+    private var lastFaceTransform: simd_float4x4?
+    private var lastBlendShapes: [ARFaceAnchor.BlendShapeLocation : NSNumber]?
     
     // MARK: - SceneKit Scene Graph for Hit Testing
     
@@ -88,10 +91,27 @@ class CameraViewController: UIViewController {
         super.viewDidLoad()
         print("CameraViewController: viewDidLoad called")
         
+        // Add navigation support if embedded in navigation controller
+        if navigationController != nil {
+            navigationItem.leftBarButtonItem = UIBarButtonItem(
+                barButtonSystemItem: .close,
+                target: self,
+                action: #selector(closeTapped)
+            )
+        }
+        
         setupUI()
         setupEyeTracking()
         setupNetworkClient()
         print("CameraViewController: Setup complete")
+    }
+    
+    @objc private func closeTapped() {
+        if let navController = navigationController {
+            navController.popViewController(animated: true)
+        } else {
+            dismiss(animated: true)
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -230,15 +250,25 @@ class CameraViewController: UIViewController {
         autoConnectButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(autoConnectButton)
         
-        // Create calibrate button
+        // Create calibrate iPhone button
         calibrateButton = UIButton(type: .system)
-        calibrateButton.setTitle("Calibrate Eye Tracking", for: .normal)
+        calibrateButton.setTitle("Calibrate iPhone Screen", for: .normal)
         calibrateButton.backgroundColor = .systemOrange
         calibrateButton.setTitleColor(.white, for: .normal)
         calibrateButton.layer.cornerRadius = 8
         calibrateButton.addTarget(self, action: #selector(calibrateButtonTapped(_:)), for: .touchUpInside)
         calibrateButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(calibrateButton)
+        
+        // Create calibrate Mac button
+        let calibrateMacButton = UIButton(type: .system)
+        calibrateMacButton.setTitle("Calibrate Mac Screen", for: .normal)
+        calibrateMacButton.backgroundColor = .systemBlue
+        calibrateMacButton.setTitleColor(.white, for: .normal)
+        calibrateMacButton.layer.cornerRadius = 8
+        calibrateMacButton.addTarget(self, action: #selector(calibrateMacButtonTapped(_:)), for: .touchUpInside)
+        calibrateMacButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(calibrateMacButton)
         
         // Setup constraints
         NSLayoutConstraint.activate([
@@ -264,7 +294,12 @@ class CameraViewController: UIViewController {
             
             // Note: gazeCursor uses frame-based positioning, no constraints needed
             
-            calibrateButton.bottomAnchor.constraint(equalTo: ipAddressTextField.topAnchor, constant: -20),
+            calibrateMacButton.bottomAnchor.constraint(equalTo: ipAddressTextField.topAnchor, constant: -20),
+            calibrateMacButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+            calibrateMacButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            calibrateMacButton.heightAnchor.constraint(equalToConstant: 44),
+            
+            calibrateButton.bottomAnchor.constraint(equalTo: calibrateMacButton.topAnchor, constant: -10),
             calibrateButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             calibrateButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             calibrateButton.heightAnchor.constraint(equalToConstant: 44),
@@ -429,6 +464,12 @@ class CameraViewController: UIViewController {
         present(calibrationVC, animated: true)
     }
     
+    @objc func calibrateMacButtonTapped(_ sender: UIButton) {
+        // Send command to Mac to start calibration
+        networkClient.sendCommand("startMacCalibration")
+        showAlert(title: "Calibration Started", message: "Look at each dot on your Mac screen. Keep your iPhone steady and look at the dots as they appear.")
+    }
+    
     /// Update cursor position on screen using screen coordinates centered at (0,0) like prototype
     private func updateCursorScreenPosition(_ screenPosition: CGPoint) {
         let screenWidth = view.bounds.width
@@ -554,6 +595,11 @@ extension CameraViewController: ARSCNViewDelegate {
     func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
         guard let faceAnchor = anchor as? ARFaceAnchor else { return }
         
+        // Store face anchor and copy transform/blend shapes data immediately (anchor can be deallocated)
+        lastFaceAnchor = faceAnchor
+        lastFaceTransform = faceAnchor.transform // Copy transform matrix
+        lastBlendShapes = faceAnchor.blendShapes // Copy blend shapes dictionary
+        
         // Update face node transform
         faceNode.transform = node.transform
         
@@ -627,8 +673,36 @@ extension CameraViewController: EyeTrackerDelegate {
                                               lookAtPoint.x, lookAtPoint.y, lookAtPoint.z)
         }
         
-        // TODO: Send gaze data to Mac when connected
-        // networkClient.sendGazeData(...)
+        // Send gaze data to Mac when connected
+        sendGazeDataToMac(screenPosition: screenPosition, lookAtPoint: lookAtPoint)
+    }
+    
+    /// Send gaze tracking data to Mac via network
+    private func sendGazeDataToMac(screenPosition: CGPoint, lookAtPoint: simd_float3) {
+        // Use copied data instead of accessing faceAnchor directly (prevents EXC_BAD_ACCESS)
+        guard let faceTransform = lastFaceTransform,
+              let blendShapes = lastBlendShapes else { return }
+        
+        // Get blend shapes for eye blink data
+        let (leftBlink, rightBlink) = GazeCalculator.getEyeBlinkValues(from: blendShapes)
+        let eyesOpen = GazeCalculator.areEyesOpen(blendShapes)
+        
+        // Create gaze vector from lookAtPoint (normalized direction)
+        let gazeVector = SIMD3<Float>(lookAtPoint.x, lookAtPoint.y, lookAtPoint.z)
+        
+        // Create GazeTrackingData with screen coordinates
+        let gazeData = GazeTrackingData(
+            gazeVector: gazeVector,
+            faceTransform: faceTransform,
+            eyeBlinkLeft: leftBlink,
+            eyeBlinkRight: rightBlink,
+            eyesOpen: eyesOpen,
+            screenPosition: screenPosition,
+            phoneScreenSize: phoneScreenPointSize
+        )
+        
+        // Send via network client
+        networkClient.sendGazeData(gazeData)
     }
     
     /// Legacy method: normalized coordinates (kept for backward compatibility)
