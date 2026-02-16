@@ -191,11 +191,11 @@ class EyeTracker {
             phoneScreenPointSize: phoneScreenPointSize,
             heightCompensation: heightCompensation
         ) else {
-            print("EyeTracker: Hit test failed - no screen point")
+            Logger.debug("EyeTracker: Hit test failed - no screen point")
             return
         }
         
-        print("EyeTracker: Hit test succeeded - screenPoint: (\(screenPoint.x), \(screenPoint.y))")
+        Logger.debug("EyeTracker: Hit test succeeded - screenPoint: (\(screenPoint.x), \(screenPoint.y))")
         
         // Skip outlier detection for now - get basic tracking working first
         
@@ -213,7 +213,7 @@ class EyeTracker {
               eyeLookAtPositionYs.count >= minSamples,
               let smoothX = eyeLookAtPositionXs.average,
               let smoothY = eyeLookAtPositionYs.average else {
-            print("EyeTracker: Not enough samples yet - X: \(eyeLookAtPositionXs.count), Y: \(eyeLookAtPositionYs.count)")
+            Logger.debug("EyeTracker: Not enough samples yet - X: \(eyeLookAtPositionXs.count), Y: \(eyeLookAtPositionYs.count)")
             return
         }
         
@@ -223,9 +223,9 @@ class EyeTracker {
         // Apply calibration if available
         if let calibration = calibrationData, calibration.isCalibrated {
             screenPosition = calibration.apply(rawPoint: screenPosition)
-            print("EyeTracker: Applied calibration - raw:(\(smoothX), \(smoothY)) -> calibrated:(\(screenPosition.x), \(screenPosition.y))")
+            Logger.debug("EyeTracker: Applied calibration - raw:(\(smoothX), \(smoothY)) -> calibrated:(\(screenPosition.x), \(screenPosition.y))")
         } else {
-            print("EyeTracker: No calibration - using raw position: (\(smoothX), \(smoothY))")
+            Logger.debug("EyeTracker: No calibration - using raw position: (\(smoothX), \(smoothY))")
         }
         
         // Call delegate with calibrated screen coordinates
