@@ -6,7 +6,7 @@ import SceneKit
 /// Calculates gaze direction using ARKit's proper eye tracking APIs
 class GazeCalculator {
     
-    // MARK: - Accurate Eye Tracking using lookAtPoint and Eye Transforms
+    // MARK: - New Accurate Eye Tracking using lookAtPoint and Eye Transforms
     
     /// Calculate gaze direction from eye transforms (more accurate than blend shapes)
     /// Uses leftEyeTransform and rightEyeTransform to get actual eye orientation
@@ -166,20 +166,20 @@ class GazeCalculator {
         // Debug logging every 30 frames to avoid spam
         let frameCount = Int(CACurrentMediaTime() * 60) % 30
         if frameCount == 0 {
-            print("=== GazeCalculator Debug ===")
-            print("Right eye world: (\(String(format: "%.3f", rightEyeWorldPos.x)), \(String(format: "%.3f", rightEyeWorldPos.y)), \(String(format: "%.3f", rightEyeWorldPos.z)))")
-            print("Right target world: (\(String(format: "%.3f", rightTargetWorldPos.x)), \(String(format: "%.3f", rightTargetWorldPos.y)), \(String(format: "%.3f", rightTargetWorldPos.z)))")
-            print("Virtual phone world: (\(String(format: "%.3f", virtualPhoneNode.worldPosition.x)), \(String(format: "%.3f", virtualPhoneNode.worldPosition.y)), \(String(format: "%.3f", virtualPhoneNode.worldPosition.z)))")
-            print("Hit test results - R: \(phoneScreenEyeRHitTestResults.count), L: \(phoneScreenEyeLHitTestResults.count)")
+            Logger.debug("=== GazeCalculator Debug ===")
+            Logger.debug("Right eye world: (\(String(format: "%.3f", rightEyeWorldPos.x)), \(String(format: "%.3f", rightEyeWorldPos.y)), \(String(format: "%.3f", rightEyeWorldPos.z)))")
+            Logger.debug("Right target world: (\(String(format: "%.3f", rightTargetWorldPos.x)), \(String(format: "%.3f", rightTargetWorldPos.y)), \(String(format: "%.3f", rightTargetWorldPos.z)))")
+            Logger.debug("Virtual phone world: (\(String(format: "%.3f", virtualPhoneNode.worldPosition.x)), \(String(format: "%.3f", virtualPhoneNode.worldPosition.y)), \(String(format: "%.3f", virtualPhoneNode.worldPosition.z)))")
+            Logger.debug("Hit test results - R: \(phoneScreenEyeRHitTestResults.count), L: \(phoneScreenEyeLHitTestResults.count)")
             if let screenNode = virtualPhoneNode.childNodes.first {
-                print("Screen node world: (\(String(format: "%.3f", screenNode.worldPosition.x)), \(String(format: "%.3f", screenNode.worldPosition.y)), \(String(format: "%.3f", screenNode.worldPosition.z)))")
+                Logger.debug("Screen node world: (\(String(format: "%.3f", screenNode.worldPosition.x)), \(String(format: "%.3f", screenNode.worldPosition.y)), \(String(format: "%.3f", screenNode.worldPosition.z)))")
                 if let geometry = screenNode.geometry as? SCNPlane {
-                    print("Screen geometry: \(geometry.width)x\(geometry.height) meters")
+                    Logger.debug("Screen geometry: \(geometry.width)x\(geometry.height) meters")
                 } else {
-                    print("Screen has no SCNPlane geometry!")
+                    Logger.error("Screen has no SCNPlane geometry!")
                 }
             } else {
-                print("ERROR: No screen child node found!")
+                Logger.error("No screen child node found!")
             }
         }
         
@@ -201,7 +201,7 @@ class GazeCalculator {
             hasRightEyeResult = true
             
             // Debug: print local and converted coordinates
-            print("GazeCalc: Right eye local: (\(String(format: "%.4f", localX)), \(String(format: "%.4f", localY))) -> screen: (\(String(format: "%.1f", eyeRLookAt.x)), \(String(format: "%.1f", eyeRLookAt.y)))")
+            Logger.debug("GazeCalc: Right eye local: (\(String(format: "%.4f", localX)), \(String(format: "%.4f", localY))) -> screen: (\(String(format: "%.1f", eyeRLookAt.x)), \(String(format: "%.1f", eyeRLookAt.y)))")
             break // Use first result (like prototype)
         }
         
@@ -215,13 +215,13 @@ class GazeCalculator {
             hasLeftEyeResult = true
             
             // Debug: print local and converted coordinates
-            print("GazeCalc: Left eye local: (\(String(format: "%.4f", localX)), \(String(format: "%.4f", localY))) -> screen: (\(String(format: "%.1f", eyeLLookAt.x)), \(String(format: "%.1f", eyeLLookAt.y)))")
+            Logger.debug("GazeCalc: Left eye local: (\(String(format: "%.4f", localX)), \(String(format: "%.4f", localY))) -> screen: (\(String(format: "%.1f", eyeLLookAt.x)), \(String(format: "%.1f", eyeLLookAt.y)))")
             break // Use first result (like prototype)
         }
         
         // Only return result if both eyes have valid hit test results (like prototype)
         guard hasRightEyeResult && hasLeftEyeResult else {
-            print("GazeCalc: No results - R:\(hasRightEyeResult) L:\(hasLeftEyeResult)")
+            Logger.debug("GazeCalc: No results - R:\(hasRightEyeResult) L:\(hasLeftEyeResult)")
             return nil // Hit test failed for one or both eyes
         }
         
