@@ -21,6 +21,9 @@ class CalibrationViewController: UIViewController {
     private var progressLabel: UILabel!
     private var cancelButton: UIButton!
     
+    // MARK: - Eye Tracking
+    private let dwellDetector = DwellDetector()
+    
     // MARK: - SceneKit nodes (same as CameraViewController for hit testing)
     private var faceNode: SCNNode = SCNNode()
     
@@ -81,6 +84,7 @@ class CalibrationViewController: UIViewController {
         
         setupARScene()
         setupUI()
+        setupDwellDetector()
         // Don't setup calibration points here - view.bounds might be zero
     }
     
@@ -102,6 +106,7 @@ class CalibrationViewController: UIViewController {
         super.viewWillDisappear(animated)
         sceneView.session.pause()
         countdownTimer?.invalidate()
+        dwellDetector.reset()
     }
     
     // MARK: - Setup
@@ -175,6 +180,7 @@ class CalibrationViewController: UIViewController {
         cancelButton.setTitleColor(.white, for: .normal)
         cancelButton.backgroundColor = .systemRed.withAlphaComponent(0.8)
         cancelButton.layer.cornerRadius = 8
+        cancelButton.tag = 100 // Mark as selectable for dwell detection
         cancelButton.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(cancelButton)
@@ -200,7 +206,7 @@ class CalibrationViewController: UIViewController {
         let marginX = w * marginPercent
         let marginY = h * marginPercent
         
-        print("CalibrationVC: View bounds: \(w)x\(h), margins: \(marginX)x\(marginY)")
+        Logger.debug("CalibrationVC: View bounds: \(w)x\(h), margins: \(marginX)x\(marginY)")
         
         calibrationPoints = [
             // Center
@@ -217,9 +223,9 @@ class CalibrationViewController: UIViewController {
             CGPoint(x: w - marginX, y: h / 2)                   // Right-center
         ]
         
-        print("CalibrationVC: Setup \(calibrationPoints.count) calibration points:")
+        Logger.debug("CalibrationVC: Setup \(calibrationPoints.count) calibration points:")
         for (index, point) in calibrationPoints.enumerated() {
-            print("  Point \(index + 1): (\(point.x), \(point.y))")
+            Logger.debug("  Point \(index + 1): (\(point.x), \(point.y))")
         }
     }
     
@@ -261,7 +267,7 @@ class CalibrationViewController: UIViewController {
                 setupCalibrationPoints()
             } else {
                 // View bounds still not available, wait and retry
-                print("CalibrationVC: Waiting for valid view bounds...")
+                Logger.debug("CalibrationVC: Waiting for valid view bounds...")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     self.showNextPoint()
                 }
@@ -277,7 +283,7 @@ class CalibrationViewController: UIViewController {
         let point = calibrationPoints[currentPointIndex]
         
         // Debug: print the point position
-        print("CalibrationVC: Showing point \(currentPointIndex + 1) at (\(point.x), \(point.y)) - screen: \(view.bounds.width)x\(view.bounds.height)")
+        Logger.debug("CalibrationVC: Showing point \(currentPointIndex + 1) at (\(point.x), \(point.y)) - screen: \(view.bounds.width)x\(view.bounds.height)")
         
         // Update UI
         instructionLabel.text = "Look at the dot"
@@ -332,7 +338,7 @@ class CalibrationViewController: UIViewController {
         instructionLabel.text = "Recording..."
         calibrationDot.backgroundColor = .systemYellow
         
-        print("CalibrationVC: Starting collection for point \(currentPointIndex + 1)")
+        Logger.debug("CalibrationVC: Starting collection for point \(currentPointIndex + 1)")
     }
     
     private func processGazeSample(_ rawPoint: CGPoint) {
@@ -355,7 +361,7 @@ class CalibrationViewController: UIViewController {
         
         // Calculate average raw position for this point
         guard !rawSamplesForCurrentPoint.isEmpty else {
-            print("CalibrationVC: No samples collected for point \(currentPointIndex + 1)")
+            Logger.error("CalibrationVC: No samples collected for point \(currentPointIndex + 1)")
             currentPointIndex += 1
             showNextPoint()
             return
@@ -368,7 +374,7 @@ class CalibrationViewController: UIViewController {
         collectedRawPoints.append(avgRawPoint)
         collectedScreenPoints.append(calibrationPoints[currentPointIndex])
         
-        print("CalibrationVC: Point \(currentPointIndex + 1) - screen:(\(calibrationPoints[currentPointIndex].x), \(calibrationPoints[currentPointIndex].y)) raw:(\(avgX), \(avgY))")
+        Logger.debug("CalibrationVC: Point \(currentPointIndex + 1) - screen:(\(calibrationPoints[currentPointIndex].x), \(calibrationPoints[currentPointIndex].y)) raw:(\(avgX), \(avgY))")
         
         // Animate dot completion
         calibrationDot.backgroundColor = .systemGreen
@@ -420,7 +426,28 @@ class CalibrationViewController: UIViewController {
     @objc private func cancelTapped() {
         countdownTimer?.invalidate()
         sceneView.session.pause()
+        dwellDetector.reset()
         delegate?.calibrationDidCancel()
+        dismiss(animated: true)
+    }
+    
+    private func setupDwellDetector() {
+        dwellDetector.delegate = self
+        dwellDetector.setDwellThreshold(1.8) // 1.8 seconds
+    }
+    
+    private func convertRawGazeToAbsolutePosition(_ rawGaze: CGPoint) -> CGPoint {
+        let screenWidth = view.bounds.width
+        let screenHeight = view.bounds.height
+        
+        // rawGaze is centered at (0,0), convert to absolute coordinates
+        let centerX = screenWidth / 2
+        let centerY = screenHeight / 2
+        
+        let absoluteX = centerX + rawGaze.x
+        let absoluteY = centerY + rawGaze.y
+        
+        return CGPoint(x: absoluteX, y: absoluteY)
     }
     
     // MARK: - Gaze Calculation (simplified version for calibration)
@@ -493,6 +520,10 @@ extension CalibrationViewController: ARSCNViewDelegate {
         if let rawGaze = calculateRawGaze(from: faceAnchor) {
             DispatchQueue.main.async {
                 self.processGazeSample(rawGaze)
+                
+                // Update dwell detector with absolute screen position
+                let absolutePosition = self.convertRawGazeToAbsolutePosition(rawGaze)
+                self.dwellDetector.updateGazePosition(absolutePosition, in: self.view)
             }
         }
     }
@@ -508,7 +539,47 @@ extension CalibrationViewController: ARSCNViewDelegate {
 extension CalibrationViewController: ARSessionDelegate {
     
     func session(_ session: ARSession, didFailWithError error: Error) {
-        print("CalibrationVC: AR session failed - \(error)")
+        Logger.error("CalibrationVC: AR session failed - \(error)")
         showError("AR session error")
+    }
+}
+
+// MARK: - DwellDetectorDelegate
+extension CalibrationViewController: DwellDetectorDelegate {
+    func dwellDetector(_ detector: DwellDetector, didStartDwellingOn view: UIView) {
+        if let button = view as? UIButton, button === cancelButton {
+            // Add highlight to cancel button
+            UIView.animate(withDuration: 0.2) {
+                button.alpha = 0.7
+                button.transform = CGAffineTransform(scaleX: 1.05, y: 1.05)
+            }
+        }
+    }
+    
+    func dwellDetector(_ detector: DwellDetector, didUpdateDwellProgress progress: Float, on view: UIView) {
+        // Can add progress indicator if needed
+    }
+    
+    func dwellDetector(_ detector: DwellDetector, didCompleteDwellOn view: UIView) {
+        // Haptic feedback
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
+        if let button = view as? UIButton, button === cancelButton {
+            UIView.animate(withDuration: 0.2) {
+                button.alpha = 1.0
+                button.transform = .identity
+            }
+            cancelTapped()
+        }
+    }
+    
+    func dwellDetector(_ detector: DwellDetector, didCancelDwellOn view: UIView) {
+        if let button = view as? UIButton, button === cancelButton {
+            UIView.animate(withDuration: 0.2) {
+                button.alpha = 1.0
+                button.transform = .identity
+            }
+        }
     }
 }

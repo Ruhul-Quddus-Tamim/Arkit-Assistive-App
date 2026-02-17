@@ -20,7 +20,8 @@ class CameraViewController: UIViewController {
     private let eyeTracker = EyeTracker()
     private let networkClient = TrackingDataClient()
     private var isTracking = false
-    private var lastFaceAnchor: ARFaceAnchor?
+    // Note: Do NOT store ARFaceAnchor - it retains ARFrame and causes camera to stop
+    // Only store copied data (transform and blendShapes) which is safe
     private var lastFaceTransform: simd_float4x4?
     private var lastBlendShapes: [ARFaceAnchor.BlendShapeLocation : NSNumber]?
     
@@ -582,7 +583,7 @@ extension CameraViewController: ARSCNViewDelegate {
     
     func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
         guard anchor is ARFaceAnchor else { return }
-        print("Face detected!")
+        Logger.info("Face detected")
         
         // Update face node transform
         faceNode.transform = node.transform
@@ -595,8 +596,7 @@ extension CameraViewController: ARSCNViewDelegate {
     func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
         guard let faceAnchor = anchor as? ARFaceAnchor else { return }
         
-        // Store face anchor and copy transform/blend shapes data immediately (anchor can be deallocated)
-        lastFaceAnchor = faceAnchor
+        // Copy data immediately (DO NOT store faceAnchor - it retains ARFrame and causes camera to stop)
         lastFaceTransform = faceAnchor.transform // Copy transform matrix
         lastBlendShapes = faceAnchor.blendShapes // Copy blend shapes dictionary
         
@@ -620,7 +620,7 @@ extension CameraViewController: ARSCNViewDelegate {
     }
     
     func renderer(_ renderer: SCNSceneRenderer, didRemove node: SCNNode, for anchor: ARAnchor) {
-        print("Face lost")
+        Logger.info("Face lost")
         DispatchQueue.main.async {
             self.statusLabel.text = "Face lost - Waiting..."
             self.gazeDebugLabel.text = "Gaze: --"
@@ -634,14 +634,14 @@ extension CameraViewController: ARSCNViewDelegate {
 extension CameraViewController: ARSessionDelegate {
     
     func session(_ session: ARSession, didFailWithError error: Error) {
-        print("ARKit session failed: \(error.localizedDescription)")
+        Logger.error("ARKit session failed: \(error.localizedDescription)")
         DispatchQueue.main.async {
             self.statusLabel.text = "Session error"
         }
     }
     
     func sessionWasInterrupted(_ session: ARSession) {
-        print("ARKit session interrupted")
+        Logger.info("ARKit session interrupted")
         DispatchQueue.main.async {
             self.statusLabel.text = "Session interrupted"
         }

@@ -1,6 +1,7 @@
 import Foundation
 import simd
 import QuartzCore
+import CoreGraphics
 
 /// Shared data structure for gaze tracking data transmitted from iPhone to Mac
 struct GazeTrackingData: Codable {
@@ -10,19 +11,26 @@ struct GazeTrackingData: Codable {
     let eyeBlinkLeft: Float
     let eyeBlinkRight: Float
     let eyesOpen: Bool
+    // New fields for calibrated screen coordinates
+    let screenPosition: ScreenPoint?
+    let phoneScreenSize: ScreenSize?
     
     init(timestamp: TimeInterval = CACurrentMediaTime(),
          gazeVector: SIMD3<Float>,
          faceTransform: simd_float4x4,
          eyeBlinkLeft: Float,
          eyeBlinkRight: Float,
-         eyesOpen: Bool) {
+         eyesOpen: Bool,
+         screenPosition: CGPoint? = nil,
+         phoneScreenSize: CGSize? = nil) {
         self.timestamp = timestamp
         self.gazeVector = GazeVector(x: gazeVector.x, y: gazeVector.y, z: gazeVector.z)
         self.faceTransform = FaceTransform(matrix: faceTransform)
         self.eyeBlinkLeft = eyeBlinkLeft
         self.eyeBlinkRight = eyeBlinkRight
         self.eyesOpen = eyesOpen
+        self.screenPosition = screenPosition.map { ScreenPoint(x: $0.x, y: $0.y) }
+        self.phoneScreenSize = phoneScreenSize.map { ScreenSize(width: $0.width, height: $0.height) }
     }
 }
 
@@ -77,6 +85,36 @@ struct FaceTransform: Codable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(flat, forKey: .flat)
+    }
+}
+
+/// Codable wrapper for CGPoint
+struct ScreenPoint: Codable {
+    let x: CGFloat
+    let y: CGFloat
+    
+    var cgPoint: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+    
+    init(x: CGFloat, y: CGFloat) {
+        self.x = x
+        self.y = y
+    }
+}
+
+/// Codable wrapper for CGSize
+struct ScreenSize: Codable {
+    let width: CGFloat
+    let height: CGFloat
+    
+    var cgSize: CGSize {
+        CGSize(width: width, height: height)
+    }
+    
+    init(width: CGFloat, height: CGFloat) {
+        self.width = width
+        self.height = height
     }
 }
 
