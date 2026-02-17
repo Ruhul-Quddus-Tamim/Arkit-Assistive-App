@@ -101,12 +101,17 @@ class HomeViewController: UIViewController {
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        Logger.debug("=== HomeViewController viewWillAppear - YOU ARE ON THE HOME PAGE ===")
+        Logger.debug("Home page has \(icons.count) icons - NO Hi button here!")
         startFaceTracking()
     }
     
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        Logger.debug("=== HomeViewController viewWillDisappear - STOPPING eye tracking and dwell ===")
         sceneView.session.pause()
+        // CRITICAL: Cancel any pending dwell to prevent it from completing after navigation
+        dwellDetector.cancelDwell()
     }
     
     override func viewDidLayoutSubviews() {
@@ -202,6 +207,7 @@ class HomeViewController: UIViewController {
         // Back Button
         backButton = createNavButton(iconName: "arrow.left", color: .white, action: #selector(backButtonTapped))
         backButton.tag = 100
+        backButton.accessibilityIdentifier = "back"
         bottomNavContainer.addSubview(backButton)
         
         // Up Button
@@ -268,6 +274,7 @@ class HomeViewController: UIViewController {
         gazeCursor?.translatesAutoresizingMaskIntoConstraints = true // Frame-based positioning
         gazeCursor?.isHidden = true
         gazeCursor?.backgroundColor = .clear
+        gazeCursor?.isUserInteractionEnabled = false // Prevent cursor from interfering with hit testing
         view.addSubview(gazeCursor!)
         
         // Outer green ring with glow effect
@@ -280,6 +287,7 @@ class HomeViewController: UIViewController {
         outerRing.layer.shadowOffset = .zero
         outerRing.layer.shadowRadius = 8
         outerRing.layer.shadowOpacity = 0.8
+        outerRing.isUserInteractionEnabled = false
         gazeCursor?.addSubview(outerRing)
         
         // Inner solid green dot
@@ -296,6 +304,7 @@ class HomeViewController: UIViewController {
         innerDot.layer.shadowOffset = .zero
         innerDot.layer.shadowRadius = 5
         innerDot.layer.shadowOpacity = 1.0
+        innerDot.isUserInteractionEnabled = false
         gazeCursor?.addSubview(innerDot)
     }
     
@@ -315,12 +324,12 @@ class HomeViewController: UIViewController {
     
     private func setupDwellDetector() {
         dwellDetector.delegate = self
-        dwellDetector.setDwellThreshold(1.5) // 1.5 seconds
+        dwellDetector.setDwellThreshold(1.8) // 1.8 seconds
     }
     
     private func startFaceTracking() {
         guard ARFaceTrackingConfiguration.isSupported else {
-            print("Face tracking not supported")
+            Logger.error("Face tracking not supported")
             return
         }
         
@@ -358,9 +367,23 @@ class HomeViewController: UIViewController {
     }
     
     private func navigateToDetail(for icon: MenuIcon) {
-        let detailVC = DetailViewController()
-        detailVC.configure(with: icon)
-        navigationController?.pushViewController(detailVC, animated: true)
+        Logger.debug("=== Navigating from Home page - icon: '\(icon.title)' ===")
+        
+        // Check if this is the Voice Input icon (headProfile) - navigate to CommunicationViewController
+        if icon.iconType == .headProfile {
+            Logger.debug("Going to CommunicationViewController (where Hi/Yes/No/Bye buttons are)")
+            let communicationVC = CommunicationViewController()
+            navigationController?.pushViewController(communicationVC, animated: true)
+        } else if icon.iconType == .phone {
+            Logger.debug("Going to MessagesViewController (contact list)")
+            let messagesVC = MessagesViewController()
+            navigationController?.pushViewController(messagesVC, animated: true)
+        } else {
+            Logger.debug("Going to DetailViewController (PLACEHOLDER SCREEN) for icon: '\(icon.title)'")
+            let detailVC = DetailViewController()
+            detailVC.configure(with: icon)
+            navigationController?.pushViewController(detailVC, animated: true)
+        }
     }
     
     // MARK: - Eye Tracking Helpers
@@ -543,6 +566,13 @@ extension HomeViewController: DwellDetectorDelegate {
     }
     
     func dwellDetector(_ detector: DwellDetector, didCompleteDwellOn view: UIView) {
+        // CRITICAL: Ignore dwell completions if this view is not visible
+        // This prevents stale dwells from triggering after navigation
+        guard self.viewIfLoaded?.window != nil else {
+            Logger.debug("HomeViewController: Ignoring dwell completion - view is not visible")
+            return
+        }
+        
         // Haptic feedback
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
@@ -632,11 +662,11 @@ extension HomeViewController: ARSCNViewDelegate {
 
 extension HomeViewController: ARSessionDelegate {
     func session(_ session: ARSession, didFailWithError error: Error) {
-        print("AR session failed: \(error.localizedDescription)")
+        Logger.error("AR session failed: \(error.localizedDescription)")
     }
     
     func sessionWasInterrupted(_ session: ARSession) {
-        print("AR session interrupted")
+        Logger.info("AR session interrupted")
     }
     
     func sessionInterruptionEnded(_ session: ARSession) {
@@ -650,7 +680,7 @@ extension HomeViewController: ARSessionDelegate {
 extension HomeViewController: CalibrationViewControllerDelegate {
     func calibrationDidComplete(_ calibration: CalibrationData) {
         eyeTracker.calibrationData = calibration
-        print("Calibration completed and applied")
+        Logger.info("Calibration completed and applied")
         
         // Show cursor after calibration completes
         // Use a small delay to ensure view is visible after dismissal animation
@@ -664,7 +694,7 @@ extension HomeViewController: CalibrationViewControllerDelegate {
     }
     
     func calibrationDidCancel() {
-        print("Calibration cancelled")
+        Logger.info("Calibration cancelled")
         // Don't show cursor if calibration was cancelled
     }
 }
