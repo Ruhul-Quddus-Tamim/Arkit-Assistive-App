@@ -3,11 +3,8 @@ import UIKit
 /// Types of icons available in the menu
 enum IconType {
     case headProfile      // Red, head with speech/audio
-    case shoppingCart     // Blue, shopping cart
     case phone           // Green, phone/speech bubble
-    case alarm           // Yellow, alarm/siren
-    case playButton      // Red, play button
-    case turntable       // Black, turntable/vinyl
+    case computerAgent   // Purple, Computer Use Agent
 }
 
 /// Destination types for navigation
@@ -29,11 +26,8 @@ struct MenuIcon {
     var title: String {
         switch iconType {
         case .headProfile: return "Voice Input"
-        case .shoppingCart: return "Shopping"
         case .phone: return "Communication"
-        case .alarm: return "Alerts"
-        case .playButton: return "Media Playback"
-        case .turntable: return "Music"
+        case .computerAgent: return "Computer Agent"
         }
     }
     
@@ -41,26 +35,17 @@ struct MenuIcon {
     var iconName: String {
         switch iconType {
         case .headProfile: return "person.wave.2.fill"
-        case .shoppingCart: return "cart.fill"
         case .phone: return "message.fill"
-        case .alarm: return "bell.fill"
-        case .playButton: return "play.circle.fill"
-        case .turntable: return "music.note"
+        case .computerAgent: return "desktopcomputer"
         }
     }
     
-    /// All 6 grid icons as defined in the reference design
+    /// Main grid icons (Voice Input, Messages, Computer Agent)
     static let allIcons: [MenuIcon] = [
         MenuIcon(
             id: "head_profile",
             iconType: .headProfile,
             backgroundColor: UIColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0), // #FF3B30
-            destinationType: .placeholder
-        ),
-        MenuIcon(
-            id: "shopping_cart",
-            iconType: .shoppingCart,
-            backgroundColor: UIColor(red: 0.0, green: 0.48, blue: 1.0, alpha: 1.0), // #007AFF
             destinationType: .placeholder
         ),
         MenuIcon(
@@ -70,21 +55,9 @@ struct MenuIcon {
             destinationType: .placeholder
         ),
         MenuIcon(
-            id: "alarm",
-            iconType: .alarm,
-            backgroundColor: UIColor(red: 1.0, green: 0.80, blue: 0.0, alpha: 1.0), // #FFCC00
-            destinationType: .placeholder
-        ),
-        MenuIcon(
-            id: "play_button",
-            iconType: .playButton,
-            backgroundColor: UIColor(red: 1.0, green: 0.23, blue: 0.19, alpha: 1.0), // #FF3B30
-            destinationType: .placeholder
-        ),
-        MenuIcon(
-            id: "turntable",
-            iconType: .turntable,
-            backgroundColor: UIColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0), // #000000
+            id: "computer_agent",
+            iconType: .computerAgent,
+            backgroundColor: UIColor(red: 0.35, green: 0.34, blue: 0.84, alpha: 1.0), // #5856D6
             destinationType: .placeholder
         )
     ]
